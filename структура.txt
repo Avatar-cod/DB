@@ -1,0 +1,235 @@
+-- Создание базы данных
+CREATE DATABASE MedicalInformationSystem;
+USE MedicalInformationSystem;
+
+-- Таблица медицинских учреждений
+CREATE TABLE MedicalInstitutions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    type ENUM('Больница', 'Поликлиника') NOT NULL,
+    address VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица лабораторий
+CREATE TABLE Laboratories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    address VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица профилей лабораторий
+CREATE TABLE LaboratorySpecializations (
+    laboratory_id INT,
+    specialization VARCHAR(100),
+    PRIMARY KEY (laboratory_id, specialization),
+    FOREIGN KEY (laboratory_id) REFERENCES Laboratories(id) ON DELETE CASCADE
+);
+
+-- Таблица договоров лабораторий с мед учреждениями
+CREATE TABLE LaboratoryContracts (
+    laboratory_id INT,
+    medical_institution_id INT,
+    contract_date DATE NOT NULL,
+    valid_until DATE NOT NULL,
+    PRIMARY KEY (laboratory_id, medical_institution_id),
+    FOREIGN KEY (laboratory_id) REFERENCES Laboratories(id) ON DELETE CASCADE,
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Таблица корпусов
+CREATE TABLE Buildings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    medical_institution_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    address VARCHAR(500),
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Таблица отделений
+CREATE TABLE Departments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    building_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    specialization VARCHAR(255) NOT NULL,
+    FOREIGN KEY (building_id) REFERENCES Buildings(id) ON DELETE CASCADE
+);
+
+-- Таблица палат
+CREATE TABLE Wards (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    department_id INT NOT NULL,
+    number VARCHAR(20) NOT NULL,
+    bed_count INT NOT NULL CHECK (bed_count > 0),
+    FOREIGN KEY (department_id) REFERENCES Departments(id) ON DELETE CASCADE
+);
+
+-- Таблица коек
+CREATE TABLE Beds (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    ward_id INT NOT NULL,
+    number VARCHAR(20) NOT NULL,
+    is_occupied BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (ward_id) REFERENCES Wards(id) ON DELETE CASCADE
+);
+
+-- Таблица персонала (общая)
+CREATE TABLE Staff (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    full_name VARCHAR(255) NOT NULL,
+    birth_date DATE NOT NULL,
+    experience_years INT DEFAULT 0 CHECK (experience_years >= 0),
+    staff_type ENUM('Врач', 'Обслуживающий') NOT NULL,
+    specialty VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица трудоустройства (совместительство)
+CREATE TABLE Employment (
+    staff_id INT,
+    medical_institution_id INT,
+    position VARCHAR(100) NOT NULL,
+    rate DECIMAL(3,2) DEFAULT 1.0 CHECK (rate BETWEEN 0.1 AND 2.0),
+    start_date DATE NOT NULL,
+    end_date DATE NULL,
+    PRIMARY KEY (staff_id, medical_institution_id),
+    FOREIGN KEY (staff_id) REFERENCES Staff(id) ON DELETE CASCADE,
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Таблица врачей (наследуется от Staff)
+CREATE TABLE Doctors (
+    staff_id INT PRIMARY KEY,
+    academic_degree ENUM('Кандидат наук', 'Доктор наук', 'Нет') DEFAULT 'Нет',
+    academic_title ENUM('Доцент', 'Профессор', 'Нет') DEFAULT 'Нет',
+    FOREIGN KEY (staff_id) REFERENCES Staff(id) ON DELETE CASCADE
+);
+
+-- Таблица хирургов (специализация врачей)
+CREATE TABLE Surgeons (
+    staff_id INT PRIMARY KEY,
+    total_operations INT DEFAULT 0 CHECK (total_operations >= 0),
+    fatal_operations INT DEFAULT 0 CHECK (fatal_operations >= 0),
+    FOREIGN KEY (staff_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE
+);
+
+-- Таблица стоматологов
+CREATE TABLE Dentists (
+    staff_id INT PRIMARY KEY,
+    total_operations INT DEFAULT 0 CHECK (total_operations >= 0),
+    fatal_operations INT DEFAULT 0 CHECK (fatal_operations >= 0),
+    hazard_coefficient DECIMAL(3,2) DEFAULT 1.0,
+    FOREIGN KEY (staff_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE
+);
+
+-- Таблица рентгенологов
+CREATE TABLE Radiologists (
+    staff_id INT PRIMARY KEY,
+    hazard_coefficient DECIMAL(3,2) DEFAULT 1.0,
+    vacation_days INT DEFAULT 28,
+    FOREIGN KEY (staff_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE
+);
+
+-- Таблица невропатологов
+CREATE TABLE Neurologists (
+    staff_id INT PRIMARY KEY,
+    vacation_days INT DEFAULT 28,
+    FOREIGN KEY (staff_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE
+);
+
+-- Таблица пациентов
+CREATE TABLE Patients (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    full_name VARCHAR(255) NOT NULL,
+    gender ENUM('М', 'Ж') NOT NULL,
+    birth_date DATE NOT NULL,
+    address VARCHAR(500),
+    insurance_policy VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица прикрепления к поликлинике
+CREATE TABLE PolyclinicAssignments (
+    patient_id INT,
+    medical_institution_id INT,
+    assignment_date DATE NOT NULL,
+    PRIMARY KEY (patient_id, medical_institution_id),
+    FOREIGN KEY (patient_id) REFERENCES Patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Таблица стационарного лечения
+CREATE TABLE InpatientTreatment (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    patient_id INT NOT NULL,
+    department_id INT NOT NULL,
+    bed_id INT NOT NULL,
+    admission_date DATETIME NOT NULL,
+    discharge_date DATETIME NULL,
+    condition VARCHAR(500),
+    temperature DECIMAL(4,2) CHECK (temperature BETWEEN 30 AND 45),
+    FOREIGN KEY (patient_id) REFERENCES Patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (department_id) REFERENCES Departments(id) ON DELETE CASCADE,
+    FOREIGN KEY (bed_id) REFERENCES Beds(id) ON DELETE CASCADE
+);
+
+-- Таблица лечащих врачей для стационара
+CREATE TABLE AttendingDoctors (
+    inpatient_treatment_id INT,
+    doctor_id INT,
+    PRIMARY KEY (inpatient_treatment_id, doctor_id),
+    FOREIGN KEY (inpatient_treatment_id) REFERENCES InpatientTreatment(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE
+);
+
+-- Таблица посещений (амбулаторный прием)
+CREATE TABLE Appointments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    patient_id INT NOT NULL,
+    doctor_id INT NOT NULL,
+    medical_institution_id INT NOT NULL,
+    appointment_datetime DATETIME NOT NULL,
+    diagnosis TEXT,
+    prescriptions TEXT,
+    FOREIGN KEY (patient_id) REFERENCES Patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE,
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Таблица операций
+CREATE TABLE Operations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    appointment_id INT NULL,
+    inpatient_treatment_id INT NULL,
+    surgeon_id INT NOT NULL,
+    operation_datetime DATETIME NOT NULL,
+    operation_type VARCHAR(255) NOT NULL,
+    outcome ENUM('Успешно', 'Осложнения', 'Летальный исход') NOT NULL,
+    notes TEXT,
+    FOREIGN KEY (appointment_id) REFERENCES Appointments(id) ON DELETE SET NULL,
+    FOREIGN KEY (inpatient_treatment_id) REFERENCES InpatientTreatment(id) ON DELETE SET NULL,
+    FOREIGN KEY (surgeon_id) REFERENCES Surgeons(staff_id) ON DELETE CASCADE,
+    CHECK (appointment_id IS NOT NULL OR inpatient_treatment_id IS NOT NULL)
+);
+
+-- Таблица консультаций профессоров/доцентов
+CREATE TABLE Consultations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    doctor_id INT NOT NULL,
+    medical_institution_id INT NOT NULL,
+    consultation_date DATE NOT NULL,
+    patient_count INT DEFAULT 0 CHECK (patient_count >= 0),
+    FOREIGN KEY (doctor_id) REFERENCES Doctors(staff_id) ON DELETE CASCADE,
+    FOREIGN KEY (medical_institution_id) REFERENCES MedicalInstitutions(id) ON DELETE CASCADE
+);
+
+-- Создание индексов для оптимизации запросов
+CREATE INDEX idx_staff_specialty ON Staff(specialty);
+CREATE INDEX idx_staff_type ON Staff(staff_type);
+CREATE INDEX idx_doctors_degree ON Doctors(academic_degree);
+CREATE INDEX idx_doctors_title ON Doctors(academic_title);
+CREATE INDEX idx_inpatient_dates ON InpatientTreatment(admission_date, discharge_date);
+CREATE INDEX idx_appointment_dates ON Appointments(appointment_datetime);
+CREATE INDEX idx_operation_dates ON Operations(operation_datetime);
+CREATE INDEX idx_patient_birth_date ON Patients(birth_date);
